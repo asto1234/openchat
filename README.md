@@ -1,4 +1,4 @@
-# OpenChat - Production-Grade E2E Encrypted Chat Application
+# OpenChat -E2E Encrypted Chat Application
 
 [![Tests](https://github.com/openchat/openchat/actions/workflows/tests.yml/badge.svg)](https://github.com/openchat/openchat/actions/workflows/tests.yml)
 [![Docker](https://github.com/openchat/openchat/actions/workflows/docker.yml/badge.svg)](https://github.com/openchat/openchat/actions/workflows/docker.yml)
