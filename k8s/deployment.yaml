@@ -1,0 +1,168 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openchat-deployment
+  namespace: default
+  labels:
+    app: openchat
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: openchat
+  template:
+    metadata:
+      labels:
+        app: openchat
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "12345"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Graceful termination
+      terminationGracePeriodSeconds: 30
+      
+      # Service account
+      serviceAccountName: openchat-sa
+      
+      # Pod anti-affinity for distribution
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - openchat
+                topologyKey: kubernetes.io/hostname
+      
+      # Init containers
+      initContainers:
+        - name: init-db
+          image: openchat:latest
+          command: ['python', '-c', 'from database import DatabaseManager; DatabaseManager("/data/openchat.db").init_database()']
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      
+      # Containers
+      containers:
+        - name: openchat-server
+          image: openchat:latest
+          imagePullPolicy: Always
+          
+          # Ports
+          ports:
+            - name: chat
+              containerPort: 12345
+              protocol: TCP
+          
+          # Environment variables
+          envFrom:
+            - configMapRef:
+                name: openchat-config
+          
+          env:
+            - name: REPLICA_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          
+          # Volume mounts
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: logs
+              mountPath: /var/log
+          
+          # Resource requests and limits
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          
+          # Liveness probe (container restart if unhealthy)
+          livenessProbe:
+            tcpSocket:
+              port: 12345
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          
+          # Readiness probe (load balancer traffic)
+          readinessProbe:
+            tcpSocket:
+              port: 12345
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          
+          # Startup probe (for slow-starting applications)
+          startupProbe:
+            tcpSocket:
+              port: 12345
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 30
+          
+          # Security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: false
+            capabilities:
+              drop:
+                - ALL
+          
+          # Log streaming
+          stdout: true
+          stdin: false
+      
+      # Pod security context
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: false
+      
+      # Volumes
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: openchat-pvc
+        - name: logs
+          emptyDir: {}
+---
+# Persistent Volume Claim for database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: openchat-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

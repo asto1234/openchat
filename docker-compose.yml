@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  openchat-server:
+    build: .
+    container_name: openchat-server
+    ports:
+      - "12345:12345"
+    volumes:
+      - ./openchat.db:/app/openchat.db
+      - ./logs:/app/logs
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=12345
+      - DB_PATH=/app/openchat.db
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    networks:
+      - openchat-network
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('localhost', 12345), timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: openchat-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=openchat
+      - POSTGRES_USER=openchat
+      - POSTGRES_PASSWORD=change_me_in_production
+    restart: unless-stopped
+    networks:
+      - openchat-network
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openchat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  openchat-network:
+    driver: bridge

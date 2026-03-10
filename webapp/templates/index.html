@@ -1,0 +1,299 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Openchat - Real-time Chat</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { 
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+        height: 100vh; 
+        display: flex;
+        overflow: hidden;
+      }
+      .container { 
+        display: flex; 
+        width: 100%; 
+        height: 100%;
+        gap: 1px;
+        background: #f0f2f5;
+      }
+      .sidebar { 
+        width: 280px; 
+        background: white; 
+        padding: 20px; 
+        overflow-y: auto;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      .main { 
+        flex: 1; 
+        display: flex; 
+        flex-direction: column;
+        background: white;
+      }
+      h1 { color: #667eea; margin-bottom: 20px; font-size: 24px; }
+      .section { margin-bottom: 25px; }
+      .section-title { 
+        font-size: 12px; 
+        font-weight: 700; 
+        color: #999; 
+        text-transform: uppercase; 
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+      }
+      input { 
+        width: 100%; 
+        padding: 10px; 
+        border: 1px solid #ddd; 
+        border-radius: 4px; 
+        margin-bottom: 8px; 
+        font-size: 14px;
+      }
+      button { 
+        width: 100%; 
+        padding: 10px; 
+        background: #667eea; 
+        color: white; 
+        border: none; 
+        border-radius: 4px; 
+        cursor: pointer; 
+        font-weight: 600;
+        transition: background 0.2s;
+        margin-bottom: 8px;
+      }
+      button:hover { background: #5568d3; }
+      button.small { 
+        width: 48%; 
+        display: inline-block; 
+        margin-right: 4%;
+      }
+      button.small:last-child { margin-right: 0; }
+      .users-list, .rooms-list { 
+        background: #f9f9f9; 
+        border: 1px solid #eee; 
+        border-radius: 4px; 
+        max-height: 200px; 
+        overflow-y: auto;
+      }
+      .user-item, .room-item { 
+        padding: 8px 12px; 
+        border-bottom: 1px solid #eee; 
+        color: #333;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .user-item:last-child, .room-item:last-child { border-bottom: none; }
+      .status-dot { width: 8px; height: 8px; background: #4caf50; border-radius: 50%; }
+      .messages-area { 
+        flex: 1; 
+        overflow-y: auto; 
+        padding: 20px; 
+        background: #fafbfc;
+      }
+      .message { 
+        margin-bottom: 12px; 
+        padding: 10px 14px; 
+        background: white; 
+        border-radius: 6px;
+        border-left: 3px solid #667eea;
+        word-break: break-word;
+        font-size: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      }
+      .message.system { 
+        border-left-color: #999; 
+        color: #666;
+        font-style: italic;
+      }
+      .message.error { 
+        border-left-color: #f44336; 
+        color: #d32f2f;
+      }
+      .message.success { 
+        border-left-color: #4caf50; 
+        color: #2e7d32;
+      }
+      .message-time { font-size: 12px; color: #999; }
+      .message-sender { font-weight: 600; color: #667eea; }
+      .input-area { 
+        padding: 15px 20px; 
+        border-top: 1px solid #ddd;
+        display: flex;
+        gap: 10px;
+      }
+      #msg { flex: 1; margin: 0; }
+      #btn-send { width: 100px; margin: 0; }
+      .header { 
+        padding: 15px 20px; 
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+      .current-room { font-size: 18px; font-weight: 600; }
+      .room-item.active { background: #e3f2fd; color: #667eea; font-weight: 600; }
+      @media (max-width: 768px) {
+        .container { flex-direction: column; }
+        .sidebar { width: 100%; max-height: 30%; }
+        .main { height: 70%; }
+      }
+    </style>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <div class="sidebar">
+        <h1>💬 Openchat</h1>
+        
+        <div class="section">
+          <div class="section-title">Your Username</div>
+          <input id="username" placeholder="Enter username" />
+          <button id="btn-set">✓ Set Username</button>
+          <div id="current-user" style="margin-top: 8px; padding: 8px; background: #e3f2fd; border-radius: 4px; color: #667eea; font-weight: 600; font-size: 13px;"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Online Users</div>
+          <div class="users-list" id="users-list">
+            <div class="user-item" style="color: #999;">No users yet</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Chatrooms</div>
+          <div style="display: flex; gap: 4px; margin-bottom: 10px;">
+            <input id="roomname" placeholder="Room name" style="margin: 0; flex: 1;" />
+            <button id="btn-create" style="width: auto; margin: 0; padding: 10px 12px;">Create</button>
+          </div>
+          <button id="btn-list" style="margin-bottom: 10px;">🔄 Refresh Rooms</button>
+          <div class="rooms-list" id="rooms-list">
+            <div class="room-item" style="color: #999;">No rooms yet</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="header">
+          <div class="current-room" id="current-room">Welcome to Openchat</div>
+        </div>
+        <div class="messages-area" id="messages"></div>
+        <div class="input-area">
+          <input id="msg" placeholder="Type a message..." />
+          <button id="btn-send">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const socket = io();
+      const messages = document.getElementById('messages');
+      const usersList = document.getElementById('users-list');
+      const roomsList = document.getElementById('rooms-list');
+      let currentUser = null;
+      let currentRoom = null;
+
+      function append(m, type = 'system') {
+        const d = document.createElement('div');
+        d.className = `message ${type}`;
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        d.innerHTML = `<div class="message-time">${now}</div>${m}`;
+        messages.appendChild(d);
+        messages.scrollTop = messages.scrollHeight;
+      }
+
+      function updateUsersList(users) {
+        usersList.innerHTML = '';
+        if (!users || users.length === 0) {
+          usersList.innerHTML = '<div class="user-item" style="color: #999;">No users yet</div>';
+          return;
+        }
+        users.forEach(user => {
+          const item = document.createElement('div');
+          item.className = 'user-item';
+          item.innerHTML = `<span class="status-dot"></span>${user}`;
+          usersList.appendChild(item);
+        });
+      }
+
+      function updateRoomsList(rooms) {
+        roomsList.innerHTML = '';
+        if (!rooms || rooms.length === 0) {
+          roomsList.innerHTML = '<div class="room-item" style="color: #999;">No rooms yet</div>';
+          return;
+        }
+        rooms.forEach(room => {
+          const item = document.createElement('div');
+          item.className = `room-item ${room === currentRoom ? 'active' : ''}`;
+          item.textContent = `# ${room}`;
+          item.onclick = () => {
+            currentRoom = room;
+            document.getElementById('current-room').textContent = `# ${room}`;
+            document.querySelectorAll('.room-item').forEach(r => r.classList.remove('active'));
+            item.classList.add('active');
+            messages.innerHTML = '';
+            socket.emit('join_room', { room });
+          };
+          roomsList.appendChild(item);
+        });
+      }
+
+      socket.on('connect', () => append('Connected to server', 'success'));
+      socket.on('server_msg', m => append(`📢 ${m}`, 'system'));
+      socket.on('welcome', d => {
+        currentUser = d.username || d.uuid;
+        document.getElementById('current-user').textContent = `✓ ${currentUser}`;
+        append(`Welcome, ${currentUser}!`, 'success');
+      });
+      socket.on('rooms', r => updateRoomsList(r));
+      socket.on('room_msg', d => {
+        if (d.room === currentRoom) {
+          append(`<span class="message-sender">${d.msg.split(':')[0]}</span>: ${d.msg.includes(':') ? d.msg.split(':').slice(1).join(':').trim() : d.msg}`);
+        }
+      });
+      socket.on('user_list', l => updateUsersList(l));
+      socket.on('error', m => append(`❌ ${m}`, 'error'));
+      socket.on('private_msg', d => append(`🔒 <span class="message-sender">[PM] ${d.from}</span>: ${d.msg}`));
+      socket.on('joined', d => {
+        currentRoom = d.room;
+        document.getElementById('current-room').textContent = `# ${d.room}`;
+        updateRoomsList(Object.keys(window.roomsCache || {}));
+        append(`Joined room: ${d.room}`, 'success');
+      });
+
+      document.getElementById('btn-set').onclick = () => {
+        const u = document.getElementById('username').value.trim();
+        if (!u) return;
+        socket.emit('set_username', { username: u });
+      };
+
+      document.getElementById('btn-create').onclick = () => {
+        const r = document.getElementById('roomname').value.trim();
+        if (!r) {
+          append('Room name cannot be empty', 'error');
+          return;
+        }
+        socket.emit('create_room', { room: r });
+        document.getElementById('roomname').value = '';
+      };
+
+      document.getElementById('btn-list').onclick = () => socket.emit('list_rooms');
+
+      document.getElementById('btn-send').onclick = () => {
+        const r = currentRoom;
+        const m = document.getElementById('msg').value.trim();
+        if (!r) {
+          append('Select a room first', 'error');
+          return;
+        }
+        if (!m) return;
+        socket.emit('send_message', { room: r, message: m });
+        document.getElementById('msg').value = '';
+      };
+
+      // Auto-list rooms on connect
+      socket.on('connect', () => setTimeout(() => socket.emit('list_rooms'), 500));
+    </script>
+  </body>
+</html>
